@@ -1,0 +1,101 @@
+name: Manual Build
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+    paths:
+      - ".github/workflows/sfdxPullRequests.yml"
+
+jobs:
+  check-commit:
+    runs-on: ubuntu-latest
+    outputs:
+      skip: ${{ steps.check.outputs.skip }}
+      commit: ${{ steps.check.outputs.commit }}
+    steps:
+      - name: "Last commit check"
+        id: "check"
+        run: |
+          curl -sL  -H "Authorization: bearer ${{secrets.REPO_BEARER_TOKEN}}" https://api.github.com/repos/$GITHUB_REPOSITORY/commits?sha=master | jq -r '[.[] | select(.author.type != "Bot")][0]' > commit.json
+
+          x=$(cat commit.json | jq '.commit.message' -r)
+          echo "Last commit message: $x"
+          x=$(echo $x | tr '\n' ' ')
+          echo "Replaced line breaks with spaces $x"
+          x=${x//\'/\\\'}
+          echo "Escaped single quotes $x"
+          x=${x//\"/\\\"}
+          echo "Escaped double quotes $x"
+          echo "commit=$x" >> $GITHUB_OUTPUT
+
+          if [[ $x == *"[SKIP]"* || $x == *"[SKIP PROJ]"* || $x == "Merge "* ]]; then
+            echo "Skip creation of a new package version..."
+            echo "skip=1" >> $GITHUB_OUTPUT
+          else
+            echo "skip=0" >> $GITHUB_OUTPUT
+          fi
+          rm commit.json
+
+  create-package-version:
+    runs-on: ubuntu-latest
+    needs: check-commit
+    if: ${{ needs.check-commit.outputs.skip == 0 }}
+    outputs:
+      created: ${{ steps.create.outputs.created }}
+      pid: ${{ steps.create.outputs.pid }}
+      messageFileName: ${{ steps.create.outputs.messageFileName }}
+      messageFileText: ${{ steps.create.outputs.messageFileText }}
+    steps:
+      - name: "Checkout source code"
+        uses: actions/checkout@v2
+        
+      - name: "Create Package Version"
+        id: "create"
+        run: |
+          x="${{ needs.check-commit.outputs.commit }}"
+          echo "Last commit message: $x"
+          
+          branch=${{github.ref}}
+          branch=${branch#refs/heads/}
+          echo "Current branch is $branch"
+          branchSwitch="-b $branch"
+          if [[ "dev" == $branch ]]; then
+            branch=
+            branchSwitch=
+            echo "Since branch is dev, deleting the value: Current branch is $branch"
+          fi
+
+          if [[ $x == *"[SKIP]"* || $x == *"[SKIP PROJ]"*  || $x == "Merge branch "* ]]; then
+            echo "Skip creation of a new package version..."
+            echo "messageFileText=Version creation skipped" >> $GITHUB_OUTPUT
+            echo "created=0" >> $GITHUB_OUTPUT
+            exit 0
+          elif [[ $x == *"[VAL]"* ]]; then
+            echo "Creating new validated version"
+            echo "messageFileText=Creating new validated version" >> $GITHUB_OUTPUT
+            echo "created=1" >> $GITHUB_OUTPUT
+          else
+            echo "Creating new version without validation (skipping validation)"
+            echo "messageFileText=Created new version without validation" >> $GITHUB_OUTPUT
+            echo "created=1" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Send message to Slack API
+        uses: archive/github-actions-slack@v1.0.3
+        if: always()
+        id: notify
+        with:
+          slack-bot-user-oauth-access-token: ${{secrets.SLACK_BOT_OAUTH}}
+          slack-channel: ${{secrets.SLACK_CHANNEL}}
+          slack-text: ${{ steps.create.outputs.messageFileText}}
+          slack-optional-icon_emoji: ":fire:"
+      - name: Result from "Send Message"
+        if: always()
+        run: echo "${{ steps.notify.outputs.slack-result }}" > slackResult.txt
+      - name: "Store slackResult as artifact"
+        uses: actions/upload-artifact@v2
+        if: always()
+        with:
+          name: slackResult.txt
+          path: ./slackResult.txt
