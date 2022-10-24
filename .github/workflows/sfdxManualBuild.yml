@@ -17,7 +17,7 @@ jobs:
       - name: "Last commit check"
         id: "check"
         run: |
-          curl -sL  -H "Authorization: bearer ${{secrets.REPO_BEARER_TOKEN}}" https://api.github.com/repos/$GITHUB_REPOSITORY/commits?sha=master | jq -r '[.[] | select(.author.type != "Bot")][0]' > commit.json
+          curl -sL  -H "Authorization: bearer ${{secrets.REPO_BEARER_TOKEN}}" https://api.github.com/repos/$GITHUB_REPOSITORY/commits?sha=main | jq -r '[.[] | select(.author.type != "Bot")][0]' > commit.json
 
           x=$(cat commit.json | jq '.commit.message' -r)
           echo "Last commit message: $x"
