@@ -5,8 +5,9 @@ To make it work, three repository secrets should be configured.
 1. `REPO_BEARER_TOKEN` with a value of the
  [Github personal access token for your repository](https://docs.github.com/en/enterprise-server@3.4/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token)
 2. `SLACK_BOT_OAUTH` a bot OAuth token for slack notification.
-I use `xoxb-684410959671-1628892673456-10zfFO1WHrHLKMAkDAGRlahh` for my own slack workplace.
-Create your own slack workplace and bot OAuth token to avoid spaming my slack workplace - but for a single test you may use mine.
+It is bad idea to post secret in the readme file since it is automatically blocked by slack.
+Create your own slack workplace and bot OAuth token.
+
 3. `SLACK_CHANNEL` channel name, in my case it is `random`
 
 ## Other moments
